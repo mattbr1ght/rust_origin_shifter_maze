@@ -10,7 +10,8 @@ static mut ORIGIN: usize = MAP_WIDTH*MAP_HEIGHT-1;
 static mut PLAYER: usize = 0;
 const FINISH: usize = MAP_WIDTH*MAP_HEIGHT-1;
 
-const SHIFTS: usize = 100;
+const SHIFTS: usize = 1;
+const SHIFT_ONLY_ON_MOVE: bool = true;
 
 static mut ENABLE_ORIGIN: bool = true;
 static mut ENABLE_FINISH: bool = true;
@@ -63,10 +64,10 @@ unsafe fn pause() {
     let term  = Term::stdout();
     let key = term.read_char();
     match key {
-        Ok(KEY_W) => {move_player(1);shift_origin(SHIFTS);},
-        Ok(KEY_S) => {move_player(3);shift_origin(SHIFTS);},
-        Ok(KEY_A) => {move_player(0);shift_origin(SHIFTS);},
-        Ok(KEY_D) => {move_player(2);shift_origin(SHIFTS);},
+        Ok(KEY_W) => {move_player(1);},
+        Ok(KEY_S) => {move_player(3);},
+        Ok(KEY_A) => {move_player(0);},
+        Ok(KEY_D) => {move_player(2);},
         Ok(KEY_N) => ENABLE_NODE_NUMBERS = !ENABLE_NODE_NUMBERS,
         Ok(KEY_P) => ENABLE_PATH = !ENABLE_PATH,
         Ok(KEY_F) => ENABLE_FINISH = !ENABLE_FINISH,
@@ -109,7 +110,12 @@ unsafe fn check_win() ->  bool{
 }
 
 unsafe fn move_player(direction: usize){
-    if !player_can_move(PLAYER, direction){return;}
+    if !player_can_move(PLAYER, direction){
+        if !SHIFT_ONLY_ON_MOVE{
+            shift_origin(SHIFTS);
+        }
+        return;
+    }
     match direction {
         0 => PLAYER -= 1,
         1 => PLAYER -= MAP_WIDTH,
@@ -117,6 +123,7 @@ unsafe fn move_player(direction: usize){
         3 => PLAYER += MAP_WIDTH,
         _ => {}
     }
+    shift_origin(SHIFTS);
 }
 
 unsafe fn generate_starting_board(){
