@@ -10,6 +10,8 @@ static mut ORIGIN: usize = MAP_WIDTH*MAP_HEIGHT-1;
 static mut PLAYER: usize = 0;
 const FINISH: usize = MAP_WIDTH*MAP_HEIGHT-1;
 
+const SHIFTS: usize = 10;
+
 static mut ENABLE_ORIGIN: bool = true;
 static mut ENABLE_FINISH: bool = true;
 static mut ENABLE_PATH: bool = true;
@@ -61,10 +63,10 @@ unsafe fn pause() {
     let term  = Term::stdout();
     let key = term.read_char();
     match key {
-        Ok(KEY_W) => {move_player(1);shift_origin();},
-        Ok(KEY_S) => {move_player(3);shift_origin();},
-        Ok(KEY_A) => {move_player(0);shift_origin();},
-        Ok(KEY_D) => {move_player(2);shift_origin();},
+        Ok(KEY_W) => {move_player(1);shift_origin(SHIFTS);},
+        Ok(KEY_S) => {move_player(3);shift_origin(SHIFTS);},
+        Ok(KEY_A) => {move_player(0);shift_origin(SHIFTS);},
+        Ok(KEY_D) => {move_player(2);shift_origin(SHIFTS);},
         Ok(KEY_N) => ENABLE_NODE_NUMBERS = !ENABLE_NODE_NUMBERS,
         Ok(KEY_P) => ENABLE_PATH = !ENABLE_PATH,
         Ok(KEY_F) => ENABLE_FINISH = !ENABLE_FINISH,
@@ -76,9 +78,7 @@ unsafe fn pause() {
 fn main() {
     unsafe{
         generate_starting_board();
-        for _ in 0..MAP_WIDTH*MAP_HEIGHT*MAP_WIDTH*MAP_HEIGHT{
-            shift_origin();
-        }
+        shift_origin(MAP_WIDTH*MAP_HEIGHT*MAP_WIDTH*MAP_HEIGHT);
         loop{
             OPATH = Vec::new();
             PATH = [false; MAP_WIDTH*MAP_HEIGHT];
@@ -150,6 +150,8 @@ unsafe fn visualize_board(){
             {connection = " "}
             else if x < MAP_WIDTH-1 && NEIGHBOURS[idx+1][0] 
             {connection = " "}
+            if x < MAP_WIDTH-1 && PATH[idx] && PATH[idx+1] && player_can_move(idx, 2) && ENABLE_PATH
+            {connection = "\x1b[43m \x1b[0m"}
             print!("{}{fmt_idx}{}{connection}", 
                 if idx == PLAYER {"\x1b[42m"}
                 else if idx == ORIGIN && ENABLE_ORIGIN {"\x1b[44m"}
@@ -174,6 +176,8 @@ unsafe fn visualize_board(){
             {connection = "  "}
             else if y < MAP_HEIGHT-1 && NEIGHBOURS[idx+MAP_WIDTH][1] 
             {connection = "  "}
+            if y < MAP_HEIGHT-1 && PATH[idx] && PATH[idx+MAP_WIDTH] && player_can_move(idx, 3) && ENABLE_PATH
+            {connection = "\x1b[43m  \x1b[0m"}
             print!("{connection}\x1b[41m{spaces}\x1b[0m");
         }
         print!("\n");
@@ -188,32 +192,34 @@ unsafe fn can_move(node: usize, direction: usize) -> bool {
     return true;
 }
 
-unsafe fn shift_origin(){
+unsafe fn shift_origin(shifts: usize){
     let mut rng = rand::thread_rng();
     let direction = Uniform::from(0..4);
-    let mut throw;
-    loop {
-        throw = direction.sample(&mut rng);
-        if can_move(ORIGIN, throw) {
-            break;
+    for _ in 0..shifts{
+        let mut throw;
+        loop {
+            throw = direction.sample(&mut rng);
+            if can_move(ORIGIN, throw) {
+                break;
+            }
         }
-    }
-    NEIGHBOURS[ORIGIN][throw] = true;
-    if throw == 0 {
-        NEIGHBOURS[ORIGIN - 1]  = [false; 4];
-        ORIGIN -= 1;
-    }
-    if throw == 1 {
-        NEIGHBOURS[ORIGIN - MAP_WIDTH] = [false; 4];
-        ORIGIN -= MAP_WIDTH;
-    }
-    if throw == 2 {
-        NEIGHBOURS[ORIGIN + 1] = [false; 4];
-        ORIGIN += 1;
-    }
-    if throw == 3 {
-        NEIGHBOURS[ORIGIN + MAP_WIDTH] = [false; 4];
-        ORIGIN += MAP_WIDTH;
+        NEIGHBOURS[ORIGIN][throw] = true;
+        if throw == 0 {
+            NEIGHBOURS[ORIGIN - 1]  = [false; 4];
+            ORIGIN -= 1;
+        }
+        if throw == 1 {
+            NEIGHBOURS[ORIGIN - MAP_WIDTH] = [false; 4];
+            ORIGIN -= MAP_WIDTH;
+        }
+        if throw == 2 {
+            NEIGHBOURS[ORIGIN + 1] = [false; 4];
+            ORIGIN += 1;
+        }
+        if throw == 3 {
+            NEIGHBOURS[ORIGIN + MAP_WIDTH] = [false; 4];
+            ORIGIN += MAP_WIDTH;
+        }
     }
 }
 
