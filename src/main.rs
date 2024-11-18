@@ -2,8 +2,6 @@ use rand::distributions::{Distribution, Uniform};
 
 const MAP_WIDTH: usize = 64;
 const MAP_HEIGHT: usize = 24;
-// const MAP_WIDTH: usize = 8;
-// const MAP_HEIGHT: usize = 8;
 static mut NEIGHBOURS: [[bool; 4]; MAP_WIDTH*MAP_HEIGHT] = [[false; 4]; MAP_WIDTH*MAP_HEIGHT];
 static mut OPATH: Vec<usize> = Vec::new();
 static mut PATH: [bool; MAP_WIDTH*MAP_HEIGHT] = [false; MAP_WIDTH*MAP_HEIGHT];
@@ -39,22 +37,18 @@ unsafe fn dfs(a: usize) -> bool{
                 0 => {
                     if VISITED[a-1] {continue;}
                     if !dfs(a-1) {PATH[a-1] = false; OPATH.pop();} else {return true;}
-                    //dfs(a-1);
                 },
                 1 => {
                     if VISITED[a-MAP_WIDTH] {continue;}
-                    //dfs(a-MAP_WIDTH);
                     if !dfs(a-MAP_WIDTH) {PATH[a-MAP_WIDTH] = false; OPATH.pop();} else {return true;}
                 },
                 2 => {
                     if VISITED[a+1] {continue;}
                     if !dfs(a+1) {PATH[a+1] = false; OPATH.pop();} else {return true;}
-                    //dfs(a+1);
                 },
                 3 => {
                     if VISITED[a+MAP_WIDTH] {continue;}
                     if !dfs(a+MAP_WIDTH) {PATH[a+MAP_WIDTH] = false; OPATH.pop();} else {return true;}
-                    //dfs(a+MAP_WIDTH);
                 },
                 _ => {}
             }
@@ -93,7 +87,6 @@ fn main() {
             visualize_board();
             if check_win() {print!("HEY! YOU WON!");break;};
             pause();
-            //shift_origin();
         }
     }
 }
