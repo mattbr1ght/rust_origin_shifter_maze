@@ -10,7 +10,7 @@ static mut ORIGIN: usize = MAP_WIDTH*MAP_HEIGHT-1;
 static mut PLAYER: usize = 0;
 const FINISH: usize = MAP_WIDTH*MAP_HEIGHT-1;
 
-const SHIFTS: usize = 10;
+const SHIFTS: usize = 100;
 
 static mut ENABLE_ORIGIN: bool = true;
 static mut ENABLE_FINISH: bool = true;
