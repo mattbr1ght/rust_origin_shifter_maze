@@ -43,13 +43,13 @@ const KEY_U : char = 'u';
 const KEY_Z : char = 'z';
 const KEY_X : char = 'x';
 
-fn validate_file_path(name: &str) -> Result<(), String> {
+fn validate_file_path(name: &str) -> Result<String, String> {
     if name.trim().len() != name.len() {
         Err(String::from(
             "File path cannot have leading and trailing space",
         ))
     } else {
-        Ok(())
+        Ok(name.trim().to_owned())
     }
 }
 
