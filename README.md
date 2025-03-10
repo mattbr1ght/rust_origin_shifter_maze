@@ -1,4 +1,4 @@
-hello,
+# hello,
 
 this is a maze solver, generator and loader.
 
