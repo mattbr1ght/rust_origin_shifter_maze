@@ -55,6 +55,6 @@ but after another 2 moves the path was changed so that we need to go back in ord
 
 ---- BACKSTAGE ----
 
-this is how the program recognizes nodes. they are just lists of 4 booleans stored in a vector that symbolize directions in which they can connect with each other (it can lead to redundancy and it does in my approach but it's fine for this project). eg. NODES[0] is a list of 4 booleans that looks like so [false, false, true, true] (NOTE: i start with the left direction and go clockwise); this is true for the following image.
+this is how the program recognizes nodes. they are just lists of 4 booleans stored in a vector that symbolize directions in which they can connect with each other (it can lead to redundancy and it does in my approach but it's fine for this project). eg. NEIGHBOURS[0] is a list of 4 booleans that looks like so [false, false, true, true] (NOTE: i start with the left direction and go clockwise); this is true for the following image.
 
 ![image](https://github.com/user-attachments/assets/f653a700-05ba-4adc-9d6d-bc3756e05be6)
