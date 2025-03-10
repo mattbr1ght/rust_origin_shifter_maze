@@ -1,34 +1,50 @@
 use rand::distributions::{Distribution, Uniform};
+use std::time::SystemTime;
 use clap::Parser;
-use std::{env, fs};
+use std::fs;
 use console::Term;
 
+//constants
 static mut MAP_WIDTH  : usize = 0;
 static mut MAP_HEIGHT : usize = 0;
-
+//collections
 static mut MAP        : Vec<Vec<char>> = Vec::new();
 static mut NEIGHBOURS : Vec<[bool; 4]> = Vec::new();
 static mut OPATH      : Vec<usize>     = Vec::new();
 static mut PATH       : Vec<bool>      = Vec::new();
 static mut VISITED    : Vec<bool>      = Vec::new();
+static mut DVISITED   : Vec<bool>      = Vec::new();
+static mut DISTANCES  : Vec<usize>     = Vec::new();
 
+//static mut DBEEN      : Vec<bool>     = Vec::new(); //for new feature - shadow memory that
+//remembers where you've been and doesn't shadow those areas
+
+//special nodes
 static mut ORIGIN : usize = 0;
 static mut PLAYER : usize = 0;
 static mut FINISH : usize = 0;
+// statistics
+static mut MOVES_MADE       : usize = 0;
+static mut TOTAL_MOVES_MADE : usize = 0;
+static mut SHORTEST_PATH    : usize = 0;
+//variables and options
+static mut SHIFTS               : usize = 1;
+static mut ENABLE_SHIFTS        : bool  = false;
+static mut SHIFT_ONLY_ON_MOVE   : bool  = false;
 
-static mut SHIFTS             : usize = 1;
-static mut ENABLE_SHIFTS      : bool  = false;
-static mut SHIFT_ONLY_ON_MOVE : bool  = true;
+static mut ENABLE_ORIGIN        : bool = false;
+static mut ENABLE_FINISH        : bool = true;
+static mut ENABLE_PATH          : bool = false;
+static mut ENABLE_NODE_NUMBERS  : bool = false;
 
-static mut ENABLE_ORIGIN       : bool = false;
-static mut ENABLE_FINISH       : bool = true;
-static mut ENABLE_PATH         : bool = false;
-static mut ENABLE_NODE_NUMBERS : bool = false;
+static mut VIEW_DISTANCE        : usize = 2;
+static mut ENABLE_SHADOWS       : bool = false;
+static mut ENABLE_SHADOW_MEMORY : bool = false;
 
-static mut ENABLE_DEBUG : bool = false;
-static mut ENABLE_INSTRUCTIONS : bool = false;
+static mut ENABLE_DEBUG         : bool = false;
+static mut ENABLE_INSTRUCTIONS  : bool = false;
 
-
+//keys
 const KEY_W : char = 'w';
 const KEY_S : char = 's';
 const KEY_A : char = 'a';
@@ -42,6 +58,121 @@ const KEY_I : char = 'i';
 const KEY_U : char = 'u';
 const KEY_Z : char = 'z';
 const KEY_X : char = 'x';
+const KEY_K : char = 'k';
+
+//clap struct
+#[derive(Parser)]
+#[command(author = "Mateusz Wroński (mattbr1ght) => matt@mattbr1ght.dev")]
+#[command(after_help = "Author: Mateusz Wroński (mattbr1ght) => matt@mattbr1ght.dev")]
+#[command(version = "1.0.0")]
+#[command(about = "A program to load, generate and solve mazes. (allows movement)")]
+struct Args {
+    #[arg(short='W', long, default_value="10")]
+    /// Width of the generated maze (ignored if file is specified)
+    width: usize,  
+
+    #[arg(short='H', long, default_value="10")]
+    /// Height of the generated maze (ignored if file is specified)
+    height: usize,  
+
+    #[arg(short, long, value_parser = validate_file_path)]
+    /// File to load as the maze
+    file: Option<String>, 
+
+    #[arg(short, long)]
+    /// When specified displays some extra parameters and options
+    debug: bool, 
+    
+    #[arg(short, long)]
+    /// When specified instructions will be turned on
+    instructions: bool,
+
+    
+    #[arg(short = 'D', long, default_value="2")]
+    /// When specified the player can only see up to a given view distance
+    view_distance: usize,
+
+    #[arg(short = 'S', long)]
+    /// When specified the player can only see up to a given view distance
+    shadows: bool,
+
+    #[arg(short, long)]
+    /// When specified shifting will be turned on
+    shift: bool,
+
+    #[arg(short = 'O', long)]
+    /// When specified shifting will occur only on legal move # NOTE: WILL WORK ONLY IF `shift` switch
+    /// was used
+
+    shift_on_move: bool,
+    #[arg(short, long, default_value="1")]
+    /// Number of how many shifts are made by the origin per player move # NOTE: WILL WORK ONLY IF `shift` switch
+    /// was used
+    number_of_shifts: usize,
+}
+
+fn main() {
+    let args = Args::parse();
+
+    unsafe{
+        ENABLE_DEBUG = args.debug;
+        ENABLE_INSTRUCTIONS = args.instructions;
+        SHIFT_ONLY_ON_MOVE = args.shift_on_move;
+        ENABLE_SHIFTS = args.shift;
+        ENABLE_SHADOWS = args.shadows;
+        SHIFTS = args.number_of_shifts;
+        VIEW_DISTANCE = args.view_distance;
+
+        if let Some(file) = args.file {
+            load_maze_from_file(file);
+            visualize_board();
+        } else{
+            initialize(args.width, args.height);
+            generate_starting_board();
+            shift_origin(MAP_WIDTH*MAP_HEIGHT*MAP_WIDTH*MAP_HEIGHT);
+        }
+
+        dfs(FINISH);
+
+        if !ENABLE_SHIFTS {
+            for n in PATH.iter() {
+                if *n { SHORTEST_PATH += 1 }
+            }
+            SHORTEST_PATH -= 1;
+        }
+
+        if ENABLE_SHADOWS {
+            distances(PLAYER, 0);
+        }
+
+        let start = SystemTime::now();
+        loop{
+            visualize_board();
+            print_options();
+
+            if check_win() {print!("HEY! YOU WON!");break;};
+            
+            pause();
+            if check_win() && ENABLE_SHADOWS {ENABLE_SHADOWS=false;}
+
+            OPATH = Vec::new();
+            PATH = vec![false; MAP_WIDTH*MAP_HEIGHT];
+            VISITED = vec![false; MAP_WIDTH*MAP_HEIGHT];
+            dfs(FINISH);
+            if ENABLE_SHADOWS {
+                DVISITED = vec![false; MAP_WIDTH*MAP_HEIGHT];
+                distances(PLAYER, 0);
+            }
+        }
+        match start.elapsed() {
+            Ok(elapsed) => print!(" {:?} | Moves made: {}/{} (legal/illegal)", elapsed, MOVES_MADE, TOTAL_MOVES_MADE),
+            Err(err) => panic!("Error: {err}"),
+        }
+        if !ENABLE_SHIFTS {
+            print!(" | Shortest path: {}", SHORTEST_PATH);
+        }
+    }
+}
 
 fn validate_file_path(name: &str) -> Result<String, String> {
     if name.trim().len() != name.len() {
@@ -59,29 +190,60 @@ unsafe fn dfs(a: usize) -> bool{
     VISITED[a] = true;
     if a == PLAYER {return true;};
     for direction in 0..4 {
-        if player_can_move(a, direction){
-            match direction {
-                0 => {
-                    if VISITED[a-1] {continue;}
-                    if !dfs(a-1) {PATH[a-1] = false; OPATH.pop();} else {return true;}
-                },
-                1 => {
-                    if VISITED[a-MAP_WIDTH] {continue;}
-                    if !dfs(a-MAP_WIDTH) {PATH[a-MAP_WIDTH] = false; OPATH.pop();} else {return true;}
-                },
-                2 => {
-                    if VISITED[a+1] {continue;}
-                    if !dfs(a+1) {PATH[a+1] = false; OPATH.pop();} else {return true;}
-                },
-                3 => {
-                    if VISITED[a+MAP_WIDTH] {continue;}
-                    if !dfs(a+MAP_WIDTH) {PATH[a+MAP_WIDTH] = false; OPATH.pop();} else {return true;}
-                },
-                _ => {}
-            }
+
+        if !player_can_move(a, direction){continue;}
+
+        match direction {
+            0 => {
+                if VISITED[a-1] {continue;}
+                if !dfs(a-1) {PATH[a-1] = false; OPATH.pop();} else {return true;}
+            },
+            1 => {
+                if VISITED[a-MAP_WIDTH] {continue;}
+                if !dfs(a-MAP_WIDTH) {PATH[a-MAP_WIDTH] = false; OPATH.pop();} else {return true;}
+            },
+            2 => {
+                if VISITED[a+1] {continue;}
+                if !dfs(a+1) {PATH[a+1] = false; OPATH.pop();} else {return true;}
+            },
+            3 => {
+                if VISITED[a+MAP_WIDTH] {continue;}
+                if !dfs(a+MAP_WIDTH) {PATH[a+MAP_WIDTH] = false; OPATH.pop();} else {return true;}
+            },
+            _ => {}
         }
     }
     return false;
+}
+
+unsafe fn distances(a: usize, distance: usize){
+
+    DISTANCES[a] = distance;
+    DVISITED[a] = true;
+    for direction in 0..4 {
+
+        if !player_can_move(a, direction){continue;}
+
+        match direction {
+            0 => {
+                if DVISITED[a-1] {continue;}
+                distances(a-1, distance+1);
+            },
+            1 => {
+                if DVISITED[a-MAP_WIDTH] {continue;}
+                distances(a-MAP_WIDTH, distance+1);
+            },
+            2 => {
+                if DVISITED[a+1] {continue;}
+                distances(a+1, distance+1);
+            },
+            3 => {
+                if DVISITED[a+MAP_WIDTH] {continue;}
+                distances(a+MAP_WIDTH, distance+1);
+            },
+            _ => {}
+        }
+    }
 }
 
 unsafe fn pause() {
@@ -100,6 +262,7 @@ unsafe fn pause() {
         Ok(KEY_U) => if SHIFTS-1>=1 {SHIFTS-=1;},
         Ok(KEY_Z) => ENABLE_SHIFTS = !ENABLE_SHIFTS,
         Ok(KEY_X) => SHIFT_ONLY_ON_MOVE = !SHIFT_ONLY_ON_MOVE,
+        Ok(KEY_K) => ENABLE_SHADOWS = !ENABLE_SHADOWS,
         _ => {}
     }
 }
@@ -115,6 +278,12 @@ unsafe fn initialize(width: usize, height: usize) {
     PLAYER = 0;
     ORIGIN = MAP_WIDTH*MAP_HEIGHT-1;
     FINISH = MAP_WIDTH*MAP_HEIGHT-1;
+
+    OPATH = Vec::new();
+    PATH = vec![false; MAP_WIDTH*MAP_HEIGHT];
+    VISITED = vec![false; MAP_WIDTH*MAP_HEIGHT];
+    DVISITED = vec![false; MAP_WIDTH*MAP_HEIGHT];
+    DISTANCES = vec![usize::MAX; MAP_WIDTH*MAP_HEIGHT];
 }
 
 unsafe fn load_maze_from_file(file_path: String){
@@ -150,80 +319,6 @@ unsafe fn parse_neighbours(){
     }
 }
 
-#[derive(Parser)]
-#[command(author = "Mateusz Wroński (mattbr1ght)")]
-#[command(version = "1.0.0")]
-#[command(about = "A program to load, generate and solve mazes. (allows movement)")]
-struct Args {
-    #[arg(short, long, default_value="32")]
-    /// Width of the generated maze (ignored if file is specified)
-    width: usize,  
-
-    #[arg(short, long, default_value="22")]
-    /// Height of the generated maze (ignored if file is specified)
-    height: usize,  
-
-    #[arg(short, long, value_parser = validate_file_path)]
-    /// File to load as the maze
-    file: Option<String>, 
-
-    #[arg(short, long)]
-    /// When specified debug options will be turned on. This is useful for trying out shifting and
-    /// modifying the parameters used for shifting.
-    debug: bool, 
-    
-    #[arg(short, long)]
-    /// When specified instructions will be turned on
-    instructions: bool,
-
-    #[arg(short, long)]
-    /// When specified shifting will be turned on
-    shift: bool,
-
-
-    #[arg(short = 'S', long)]
-    /// When specified shifting will occur only on move. It means that when an illegal move was made shifting
-    /// will not happen # NOTE: WILL WORK ONLY IF `shift` switch
-    /// was used
-    shift_on_move: bool,
-
-    #[arg(short, long, default_value="1")]
-    /// Number of how many shifts are made by the origin per player move (legal or illegal / only legal
-    /// if `shift-on-move` switch was used)
-    number_of_shifts: usize,
-}
-
-fn main() {
-    let args = Args::parse();
-    unsafe{
-        ENABLE_DEBUG = args.debug;
-        ENABLE_INSTRUCTIONS = args.instructions;
-        SHIFT_ONLY_ON_MOVE = args.shift_on_move;
-        ENABLE_SHIFTS = args.shift;
-        SHIFTS = args.number_of_shifts;
-
-        if let Some(file) = args.file {
-            load_maze_from_file(file);
-            visualize_board();
-        } else{
-            initialize(args.width, args.height);
-            generate_starting_board();
-            shift_origin(MAP_WIDTH*MAP_HEIGHT*MAP_WIDTH*MAP_HEIGHT);
-        }
-
-        loop{
-            OPATH = Vec::new();
-            PATH = vec![false; MAP_WIDTH*MAP_HEIGHT];
-            VISITED = vec![false; MAP_WIDTH*MAP_HEIGHT];
-            dfs(FINISH);
-            visualize_board();
-            print_options();
-            if check_win() {print!("HEY! YOU WON!");break;};
-            pause();
-        }
-    }
-}
-
 unsafe fn player_can_move(node: usize, direction: usize) -> bool{
     if can_move(node, direction) {
         match direction{
@@ -242,6 +337,7 @@ unsafe fn check_win() ->  bool{
 }
 
 unsafe fn move_player(direction: usize){
+    TOTAL_MOVES_MADE += 1;
     if !player_can_move(PLAYER, direction){
         if !SHIFT_ONLY_ON_MOVE && ENABLE_SHIFTS{
             shift_origin(SHIFTS);
@@ -258,6 +354,7 @@ unsafe fn move_player(direction: usize){
     if ENABLE_SHIFTS {
         shift_origin(SHIFTS);
     }
+    MOVES_MADE += 1;
 }
 
 unsafe fn generate_starting_board(){
@@ -290,11 +387,19 @@ unsafe fn print_options(){
         println!("Press <O> to toggle display of the origin");
         println!("Press <N> to toggle display of node indexes");
         println!("Press <F> to toggle display of the finish node");
+        println!("Press <K> to toggle display of shadows");
     }
 }
 
 unsafe fn visualize_board(){
     print!("\x1b[2J\x1b[1;1H");
+    let WALL_COLOR   = "\x1b[41m";
+    let RESET_SEQ    = "\x1b[0m";
+    let PATH_COLOR   = "";
+    let PLAYER_COLOR = "";
+    let FINISH_COLOR = "";
+    let ORIGIN_COLOR = "";
+    let SHADOW_COLOR = "\x1b[48;5;240m";
     for y in 0..MAP_HEIGHT {
         if y == 0{
             if ENABLE_NODE_NUMBERS{
@@ -317,10 +422,27 @@ unsafe fn visualize_board(){
         for x in 0..MAP_WIDTH {
             let idx: usize = y * MAP_WIDTH + x;
             let fmt_idx = if ENABLE_NODE_NUMBERS {format!("{:0>3}", idx)} else {format!("{: >2}", "")};
+
+            if  
+                ENABLE_SHADOWS && 
+                DISTANCES[idx] > VIEW_DISTANCE
+            {
+                if x+1 == MAP_WIDTH {
+                    print!("{SHADOW_COLOR}{fmt_idx}{RESET_SEQ}{WALL_COLOR} {RESET_SEQ}");
+                    continue;
+                }
+                if can_move(idx, 2) && DISTANCES[idx+1] < VIEW_DISTANCE{
+                    print!("{SHADOW_COLOR}{fmt_idx}{RESET_SEQ}{WALL_COLOR} {RESET_SEQ}");
+                    continue;
+                }
+                print!("{SHADOW_COLOR}{fmt_idx} {RESET_SEQ}");
+                continue;
+            }
+
             let mut connection = "\x1b[41m \x1b[0m";
-            if NEIGHBOURS[idx][2] 
+            if player_can_move(idx, 2) //NEIGHBOURS[idx][2] 
             {connection = " "}
-            else if x < MAP_WIDTH-1 && NEIGHBOURS[idx+1][0] 
+            else if x < MAP_WIDTH-1 && player_can_move(idx+1, 0) //NEIGHBOURS[idx+1][0] 
             {connection = " "}
             if x < MAP_WIDTH-1 && PATH[idx] && PATH[idx+1] && player_can_move(idx, 2) && ENABLE_PATH
             {connection = "\x1b[43m \x1b[0m"}
@@ -342,8 +464,39 @@ unsafe fn visualize_board(){
         print!("\x1b[41m \x1b[0m");
         for x in 0..MAP_WIDTH {
             let idx: usize = y * MAP_WIDTH + x;
-            let spaces = format!("{: >1}", "");
+            let mut spaces = format!("{: >1}", "");
             let mut connection = if ENABLE_NODE_NUMBERS {format!("\x1b[41m{: >3}\x1b[0m", "")} else {format!("\x1b[41m{: >2}\x1b[0m", "")}; //"\x1b[41m   \x1b[0m";
+
+            if  
+                ENABLE_SHADOWS && 
+                DISTANCES[idx] > VIEW_DISTANCE && 
+                !(can_move(idx, 3) && DISTANCES[idx+MAP_WIDTH] < VIEW_DISTANCE)
+            {
+                if y+1 == MAP_HEIGHT {
+                    if ENABLE_NODE_NUMBERS {
+                        print!("{WALL_COLOR}   {spaces}{RESET_SEQ}");
+                    } else {
+                        print!("{WALL_COLOR}  {spaces}{RESET_SEQ}");
+                    }
+                    continue;
+                }
+                if x+1 == MAP_WIDTH {
+                    spaces = format!("{RESET_SEQ}{WALL_COLOR} ");
+                }
+                if can_move(idx, 2) && DISTANCES[idx+1] < VIEW_DISTANCE{
+                    spaces = format!("{RESET_SEQ}{WALL_COLOR} ");
+                }
+                if can_move(idx, 2) && can_move(idx+1, 3) && DISTANCES[idx+1+MAP_WIDTH] < VIEW_DISTANCE{
+                    spaces = format!("{RESET_SEQ}{WALL_COLOR} ");
+                }
+                if ENABLE_NODE_NUMBERS {
+                    print!("{SHADOW_COLOR}   {spaces}{RESET_SEQ}");
+                } else {
+                    print!("{SHADOW_COLOR}  {spaces}{RESET_SEQ}");
+                }
+                continue;
+            }
+
             if NEIGHBOURS[idx][3] 
             //{connection = format!("{: >3}", "");}
             {if ENABLE_NODE_NUMBERS {connection = format!("{: >3}", "");}else{connection = format!("{: >2}", "");}}
