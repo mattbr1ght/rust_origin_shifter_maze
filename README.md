@@ -24,6 +24,7 @@ to fix it you need to create the following DWORD key in registry
 origin_shifter.exe -w15 -h10 -i
 ```
 ![image](https://github.com/user-attachments/assets/0ec4d6bc-bc40-4921-ae83-35e744cb93ef)
+
 after moving a bit and toggling the visibility of path and origin
 ![image](https://github.com/user-attachments/assets/3b38bf98-246d-4fd7-b1b7-9155c64f90df)
 
@@ -32,14 +33,17 @@ after moving a bit and toggling the visibility of path and origin
 origin_shifter.exe -w15 -h10 -id -sS -n 1000
 ```
 ![image](https://github.com/user-attachments/assets/92427c5f-b075-44ce-9a82-c0a87aa6c54b)
+
 the next image shows how the maze was scrumbled in 1000 shifts per 1 move of the player
 ![image](https://github.com/user-attachments/assets/9f16c08a-cc67-4aa0-a80a-0d2b0ddcdd69)
 
 let's try with smaller shifts per move number
 
 ![image](https://github.com/user-attachments/assets/4edf4a3f-03cb-4d59-982e-595d23e5f7ba)
+
 after one move the path didn't change (direction of the shift is random so it can move in ways that already have passages and essentially not mutate the maze)
 ![image](https://github.com/user-attachments/assets/537d7bb4-1170-4320-95a6-6d945de1f8ef)
+
 but after another 2 moves the path was changed so that we need to go back in order to reach the end
 ![image](https://github.com/user-attachments/assets/0132a44d-3e36-455a-98e9-81250feb3add)
 
